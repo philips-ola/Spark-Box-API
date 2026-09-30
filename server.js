@@ -2,8 +2,10 @@ import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import ideaRouter from './routes/ideaRoutes.js'
+import authRouter from './routes/authRoutes.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import connectDb from './config/db.js'
+import cookieParser from 'cookie-parser'
 
 
 // Fixes MongoDB Atlas ECONNREFUSED/SRV lookup issues by forcing public DNS resolution
@@ -22,10 +24,12 @@ connectDb();
 // Middlewares
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({extended:true}));
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser);
 
 // Routes
 app.use('/api/ideas', ideaRouter);
+app.use('/api/auth', authRouter);
 
 // 404 fall back
 app.use((req, res, next) => {

@@ -1,0 +1,167 @@
+import express from 'express';
+import User from '../models/User.js';
+import { generateToken } from '../utils/generateToken.js';
+import { jwtVerify } from 'jose';
+import { JWT_SECRET } from '../utils/getJwtSecret.js';
+
+const router = express.Router();
+
+// Helper to convert plain string secret into a format 'jose' accepts
+const encodedSecret = new TextEncoder().encode(JWT_SECRET);
+
+// @Route           POST app/auth/register
+// @Description     Register new User
+// @Access          Public
+router.post('/register', async(req, res, next) => {
+    try {
+        const { name, email, password } = req.body;
+
+        if (!name || !email || !password) {
+            // FIX: Changed 'req.status' to 'res.status'
+            res.status(400);
+            throw new Error('All fields are required');
+        }
+
+        const existingUser = await User.findOne({ email: email });
+        if (existingUser) {
+            res.status(400);
+            throw new Error('User already exists');
+        }
+
+        const user = await User.create({ name, email, password });
+
+        // Create Token
+        const payload = { userId: user._id.toString() };
+        const accessToken = await generateToken(payload, '1m'); 
+        const refreshToken = await generateToken(payload, '30d');
+
+        // Set refresh token in HTTP-only cookies
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'none',
+            maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        });
+
+        res.status(201).json({
+            accessToken,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email
+            }
+        });
+
+    } catch (err) {
+        console.log(err);
+        next(err);
+    }
+});
+
+// @Route           POST app/auth/logout
+// @Description     Logout user and clear refresh token
+// @Access          Private
+router.post('/logout', (req, res) => {
+    res.clearCookie('refreshToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'none'
+    });
+    res.status(200).json({ message: 'Logged out successfully' });
+});
+
+// @Route           POST app/auth/login
+// @Description     Login user
+// @Access          public
+router.post('/login', async (req, res, next) => {
+    try {
+        const { email, password } = req.body;
+        // Check if fields are not empty
+        if (!email || !password) {
+            res.status(400);
+            throw new Error('Email and password are required to login');
+        }
+        
+        // Find user from database
+        const user = await User.findOne({ email });
+        if (!user) {
+            res.status(401);
+            throw new Error('Either Email or Password is Incorrect');
+        }
+
+        // Check if password matches
+        const isMatch = await user.matchPassword(password);
+
+        if (!isMatch) {
+            res.status(401);
+            throw new Error('Either Email or Password is Incorrect');
+        }
+
+        const payload = { userId: user._id.toString() };
+        const accessToken = await generateToken(payload, '1m'); 
+        const refreshToken = await generateToken(payload, '30d');
+
+        // Set refresh token in HTTP-only cookies
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'none',
+            maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        });
+
+        res.status(200).json({ // Best practice: 200 OK for successful login
+            accessToken,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email
+            }
+        });
+    } catch (err) {
+        if (res.statusCode === 200) res.status(400);
+        console.log(err);
+        next(err);
+    }
+});
+
+// @Route           POST app/auth/refresh
+// @Description     Generate new access token from refresh token
+// @Access          Public (Needs valid refresh token in cookie)
+router.post('/refresh', async (req, res, next) => {
+    try {
+        const token = req.cookies?.refreshToken;
+        console.log('Refreshing token...');
+
+        if (!token) {
+            res.status(401);
+            throw new Error('No refresh token');
+        }
+
+        // FIX: Passed encodedSecret (Uint8Array) so 'jose' doesn't throw a key error
+        const { payload } = await jwtVerify(token, encodedSecret);
+
+        const user = await User.findById(payload.userId);
+
+        if (!user) {
+            res.status(401);
+            throw new Error('No user');
+        }
+
+        // Generate a fresh access token
+        const newAccessToken = await generateToken({ userId: user._id.toString() }, '1m');
+        
+        res.json({
+            accessToken: newAccessToken,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email
+            }
+        });
+    } catch (err) {
+        res.status(401);
+        next(err);
+    }
+});
+
+export default router;
