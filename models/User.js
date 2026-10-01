@@ -21,17 +21,17 @@ const userSchema = new mongoose.Schema({
         minlength: 6
     }
 }, {
-    timestamp: true
+    timestamps: true
 });
 
 // Hash password before saving (Middleware)
-userSchema.pre('save', async function (next){
-    if(!this.isModified('password')) return next();
+userSchema.pre('save', async function (next) {
+    if (!this.isModified('password')) return next();
 
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
-    next;
-})
+    next();
+});
 
 // Compare entered password with hashed password (Helper function)
 userSchema.methods.matchPassword = async function(enteredPassword) {

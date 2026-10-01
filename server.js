@@ -22,10 +22,13 @@ const PORT = process.env.PORT || 8000;
 connectDb();
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+    origin: true,
+    credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser);
+app.use(cookieParser());
 
 // Routes
 app.use('/api/ideas', ideaRouter);
