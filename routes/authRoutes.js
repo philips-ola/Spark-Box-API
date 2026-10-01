@@ -11,7 +11,7 @@ const router = express.Router();
 // @Access          Public
 router.post('/register', async(req, res, next) => {
     try{
-        const {name, email, password} = req.body;
+        const {name, email, password} = req.body || {};
 
         if(!name || !email || !password) {
             res.status(400);
@@ -72,7 +72,7 @@ router.post('/logout', (req, res) => {
 // @Access          public
 router.post('/login', async (req, res, next) => {
     try{
-        const {email, password} = req.body;
+        const {email, password} = req.body || {};
         // Check if fileds are not empty
         if(!email || !password){
             res.status(400);

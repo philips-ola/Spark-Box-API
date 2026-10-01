@@ -1,6 +1,7 @@
 import express from 'express'
 import Idea from '../models/Idea.js';
 import mongoose from 'mongoose';
+import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -19,7 +20,10 @@ router.get('/', async(req, res, next) => {
 
    try {
     const ideas = await query.exec();
-    res.json(ideas);
+    res.json({
+      Total: ideas.length,
+      ideas
+   });
  }catch(err) {
     console.log(err)
     next(err)
@@ -55,41 +59,49 @@ router.get('/:id', async(req, res, next) => {
 });
 
 // @Route           POST /api/ideas
-// @Decsription     Create new IDea
+// @Decsription     Create new Idea
 // @Access          Public
-router.post('/', async (req, res) =>{
-    const {title, summary, description, tags} = req.body;
-   if(!title?.trim() || !summary?.trim() || !description?.trim()){
-      res.status(400);
-      throw new Error("title, summary, and description fields are required")
+router.post('/', protect, async (req, res, next) => {
+   try {
+      const {title, summary, description, tags} = req.body || {};
+      if(!title?.trim() || !summary?.trim() || !description?.trim()){
+         res.status(400);
+         throw new Error("title, summary, and description fields are required")
+      }
+
+      // Check if title already exists in the database
+      const titleExists = await Idea.findOne({title: title})
+      if(titleExists){
+         res.status(400);
+         throw new Error('Title already exists')
+      }
+
+      // Create an instance of an Idea
+      const newIdea = new Idea({
+         title,
+         summary,
+         description,
+         tags: typeof tags === 'string'
+            ? tags.split(',').map((tag) => tag.trim()).filter(Boolean)
+            : Array.isArray(tags)
+               ? tags.map((tag) => String(tag).trim()).filter(Boolean)
+               : [],
+         user: req.user?._id || req.user?.id
+      });
+
+      // Save the Idea
+      const savedIdea = await newIdea.save();
+      res.status(201).json(savedIdea);
+   } catch (err) {
+      next(err)
    }
-
-   // Check if title already exists in the database
-   const titleExists = await Idea.findOne({title: title})
-   if(titleExists){
-      res.status(400);
-      throw new Error('Title already exists')
-   }
-
-   // Create an instance of an Idea
-   const newIdea = new Idea({
-      title,
-      summary,
-      description,
-      tags:typeof tags === 'string' ? tags.split(',')
-      .map((tag) => tag.trim()).filter(Boolean) : Array.isArray(tags) ? tags : []
-   });
-
-   // Save the Idea
-   const savedIdea = await newIdea.save();
-   res.status(201).json(savedIdea);
 });
 
 
 // @Route           DELETE /api/ideas/:id
 // @Decsription     Delete single idea
 // @Access          Public
-router.delete('/:id', async(req, res, next) => {
+router.delete('/:id', protect, async(req, res, next) => {
 
  try {
 
@@ -100,11 +112,20 @@ router.delete('/:id', async(req, res, next) => {
       throw new Error('Idea not found')
    };
 
-    const idea = await Idea.findByIdAndDelete(id);
-    if(!idea){
-      res.status(404)
+    const idea = await Idea.findById(id);
+   if(!idea) {
+      res.status(404);
       throw new Error('Idea not found')
-    }
+   }
+
+   // Check if user owns Idea
+   if(idea.user.toString() !== req.user._id.toString()){
+      res.status(403);
+      throw new Error('Not authorized to delete this Idea');
+   }
+
+   await idea.deleteOne();
+
     res.json({"Message": 'Idea deleted successfully'});
 
  }catch(err) {
@@ -116,8 +137,8 @@ router.delete('/:id', async(req, res, next) => {
 
 // @Route           PUT /api/ideas/:id
 // @Decsription     Update single idea
-// @Access          Public
-router.patch('/:id', async(req, res, next) => {
+// @Access          protected
+router.patch('/:id', protect, async(req, res, next) => {
    try{
       const {id} = req.params;
       // Check if it is a valid ID
@@ -126,28 +147,39 @@ router.patch('/:id', async(req, res, next) => {
       throw new Error('Idea not found');
    }
 
+   const idea = await Idea.findById(id);
+
+   if(!idea) {
+      res.status(404);
+      throw new Error('Idea not found')
+   }
+
+ // Check if user owns Idea
+   if(idea.user.toString() !== req.user._id.toString()){
+      res.status(403);
+      throw new Error('Not authorized to update this Idea');
+   }
+
       // Check if some fields are empty
-      const {title, summary, description, tags} = req.body;
+      const {title, summary, description, tags} = req.body || {};
       if(!title?.trim() || !summary?.trim() || !description?.trim()){
       res.status(400);
       throw new Error("title, summary, and description fields are required")
       }
 
-      const updatedIDea = await Idea.findByIdAndUpdate(id,{
-         title, 
-         summary, 
-         description,
-         tags: tags? (Array.isArray(tags) ? tags : tags.split(',').map((t) =>t.trim())): []
-      }, {new: true, runValidators: true})
-
-      if(!updatedIDea){
-         res.status(404);
-         throw new Error('Idea not found')
-      }
-
+      idea.title = title;
+      idea.summary = summary;
+      idea.description = description;
+      idea.tags = typeof tags === 'string'
+         ? tags.split(',').map((t) => t.trim()).filter(Boolean)
+         : Array.isArray(tags)
+            ? tags.map((t) => String(t).trim()).filter(Boolean)
+            : idea.tags;
+      
+      const updatedIdea = await idea.save();
       res.json({
          message: 'Updated successfully',
-         updatedIDea
+         updatedIdea
       })
    }catch(err){
       console.log(err);
