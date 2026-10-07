@@ -6,26 +6,29 @@ import { JWT_SECRET } from "../utils/getJwtSecret.js";
 dotenv.config();
 
 export const protect = async (req, res, next) => {
-    try{
+    try {
         const authHeader = req.headers.authorization;
 
-        if(!authHeader || !authHeader.startsWith('Bearer ')){
-            res.status(401);
-            throw new Error('Not authorized, no token');
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+            return res.status(401).json({ message: "Not authorized, no token" });
         }
-        const token = authHeader.split(' ')[1];
-        const { payload } = await jwtVerify(token, JWT_SECRET);
-        const user = await User.findById(payload.userId).select('_id name email');
 
-        if(!user) {
-            res.status(401);
-            throw new Error('User not found')
+        const token = authHeader.split(" ")[1];
+        const { payload } = await jwtVerify(token, JWT_SECRET);
+
+        const user = await User.findById(payload.userId).select("_id name email");
+
+        if (!user) {
+            return res.status(401).json({ message: "User not found" });
         }
 
         req.user = user;
         next();
-    }catch(err) {
-        console.error(err);
-        return next(err instanceof Error ? err : new Error('Not authorized, token failed'));
+    } catch (err) {
+        if (err.code === "ERR_JWT_EXPIRED") {
+            return res.status(401).json({ message: "Access token expired" });
+        }
+
+        return res.status(401).json({ message: "Not authorized, token failed" });
     }
-}
+};

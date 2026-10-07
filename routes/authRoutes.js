@@ -18,6 +18,11 @@ router.post('/register', async(req, res, next) => {
             throw new Error('All fields are required')
         }
 
+        if(password.length < 6) {
+            res.status(400);
+            throw new Error('password must be minimum of 6 characters')
+        }
+
         const existingUser = await User.findOne({email: email});
         if(existingUser){
             res.status(400);
