@@ -12,7 +12,7 @@ const router = express.Router();
 // @Query           _limit (Optional limit for ideas returned)
 router.get('/', async(req, res, next) => {
    const limit = parseInt(req.query._limit);
-   const query = Idea.find().sort({createdAt: -1});
+   const query = Idea.find().populate('user', 'name').sort({createdAt: -1});
 
    if(!isNaN(limit)){
       query.limit(limit);
@@ -45,7 +45,7 @@ router.get('/:id', async(req, res, next) => {
       throw new Error('Idea not found')
    };
 
-    const idea = await Idea.findById(id);
+    const idea = await Idea.findById(id).populate('user', 'name');
     if(!idea){
       res.status(404)
       throw new Error('Idea not found')
