@@ -22,7 +22,7 @@ const PORT = process.env.PORT || 8000;
 connectDb();
 
 // CORS config
-const allowedOrigins = ['http://localhost:3000'];
+const allowedOrigins = ['http://localhost:3000', 'https://spark-box-api.onrender.com'];
 
 // Middlewares
 app.use(
