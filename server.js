@@ -22,7 +22,7 @@ const PORT = process.env.PORT || 8000;
 connectDb();
 
 // CORS config
-const allowedOrigins = ['http://localhost:3000', 'https://spark-boxs.vercel.app/'];
+const allowedOrigins = ['http://localhost:3000', 'https://spark-boxs.vercel.app'];
 
 // Middlewares
 app.use(
